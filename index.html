@@ -1,0 +1,327 @@
+<meta charset="UTF-8">
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+  rel="stylesheet"
+/>
+
+<div class="scene">
+  <div class="cube" id="cube">
+    <div class="face front">Front</div>
+    <div class="face back">Back</div>
+    <div class="face right">Right</div>
+    <div class="face left">Left</div>
+    <div class="face top">Top</div>
+    <div class="face bottom">Bottom</div>
+  </div>
+</div>
+
+<script type="module">
+  import { Chart } from "https://cdn.jsdelivr.net/npm/chart.js/auto/+esm";
+
+  const moveCtx = {
+    isMoving: false,
+    el: null,
+    mouseX: 0,
+    mouseY: 0,
+    panelX: 0,
+    panelY: 0
+  };
+
+  document.body.onmousemove = ev => {
+    if (!moveCtx.isMoving) return;
+    moveCtx.el.style.left = moveCtx.panelX + ev.x - moveCtx.mouseX;
+    moveCtx.el.style.top = moveCtx.panelY + ev.y - moveCtx.mouseY;
+  };
+
+  document.body.onmouseup = ev => {
+    console.log("up");
+    moveCtx.isMoving = false;
+  };
+
+  function createPanel(x, y, name, ...children) {
+    const $panel = document.createElement("fieldset");
+    $panel.className = "panel";
+    $panel.style.left = x;
+    $panel.style.top = y;
+
+    const $title = document.createElement("legend");
+    $title.className = "title";
+    $title.innerText = name;
+    $title.onmousedown = ev => {
+      moveCtx.isMoving = true;
+      moveCtx.el = $panel;
+      moveCtx.mouseX = ev.x;
+      moveCtx.mouseY = ev.y;
+      moveCtx.panelX = parseInt($panel.style.left);
+      moveCtx.panelY = parseInt($panel.style.top);
+    };
+
+    $panel.append($title, ...children);
+    document.body.appendChild($panel);
+  }
+
+  let defaultColors = [
+    "#3366CC",
+    "#DC3912",
+    "#FF9900",
+    "#109618",
+    "#990099",
+    "#3B3EAC",
+    "#0099C6",
+    "#DD4477",
+    "#66AA00",
+    "#B82E2E",
+    "#316395",
+    "#994499",
+    "#22AA99",
+    "#AAAA11",
+    "#6633CC",
+    "#E67300",
+    "#8B0707",
+    "#329262",
+    "#5574A6",
+    "#651067"
+  ];
+
+  function createChart(name, maxSize = 60) {
+    const $canvas = document.createElement("canvas");
+    const ctx = $canvas.getContext("2d");
+
+    const labels = [];
+    const data = [];
+
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{ label: name, data }]
+      },
+      options: {
+        borderColor: defaultColors[Math.floor(Math.random() * defaultColors.length)],
+        scales: {
+          x: { ticks: { color: "rgba(255, 255, 255, 0.6)" }, grid: { color: "rgba(255, 255, 255, 0.1)" } },
+          y: { ticks: { color: "rgba(255, 255, 255, 0.6)" }, grid: { color: "rgba(255, 255, 255, 0.1)" } }
+        }
+        // plugins: {
+        //   legend: {
+        //     display: false
+        //   }
+        // }
+      }
+    });
+
+
+    const addVal = val => {
+      if (labels.length >= maxSize) {
+        labels.shift();
+        data.shift();
+      }
+
+      const d = new Date();
+      labels.push(d.getMinutes().toString().padStart(2, "0") + ":" + d.getSeconds().toString().padStart(2, "0"));
+      data.push(val);
+
+      chart.update();
+    };
+
+    return {
+      el: $canvas,
+      chart,
+      labels,
+      data,
+      addVal
+    };
+  }
+
+  const charts = {
+    temp: createChart("Temperature"),
+    hum: createChart("Humidity"),
+    infra: createChart("Infrared"),
+    vis: createChart("Visible")
+  };
+
+  let live = true
+
+  const gyroInfo = document.createElement('pre')
+
+
+  function connect() {
+    const ws = new WebSocket(`ws://${location.host}/ws`);
+    ws.addEventListener("message", async message => {
+      const { frame, orientation } = JSON.parse(message.data);
+      if(live) {
+      charts.temp.addVal(frame.temperature);
+      charts.hum.addVal(frame.relative_humidity);
+      charts.infra.addVal(frame.infrared);
+      charts.vis.addVal(frame.visible);
+
+      cube.style.transform = `rotateX(${orientation.pitch}deg) rotateY(${orientation.yaw}deg) rotateZ(${orientation.roll}deg)`;
+     
+          gyroInfo.innerHTML = [
+        `<b>Gyro</b>: ${frame.gyro.map(x => x.toFixed(3))}`,
+        `<b>Mag</b>: ${frame.magnetic.map(x => x.toFixed(3))}`,
+        `<b>Accel</b>: ${frame.acceleration.map(x => x.toFixed(3))}`,
+        ``,
+        `<b>Pitch</b>: ${orientation.pitch.toFixed(3)}`,
+        `<b>Yaw</b>: ${orientation.yaw.toFixed(3)}`,
+        `<b>Roll</b>: ${orientation.roll.toFixed(3)}`
+      ].join('\n')
+    }
+    });
+
+    ws.addEventListener("close", () => {
+      console.log("lost connection.. reconnecting");
+      setTimeout(connect, 1000);
+    });
+  }
+
+  createPanel(Math.random() * window.innerWidth, Math.random() * window.innerHeight, "Temperature", charts.temp.el);
+  createPanel(Math.random() * window.innerWidth, Math.random() * window.innerHeight, "Humidity", charts.hum.el);
+  createPanel(
+    Math.random() * window.innerWidth,
+    Math.random() * window.innerHeight,
+    "Luminosity",
+    charts.infra.el,
+    charts.vis.el
+  );
+  createPanel(Math.random() * window.innerWidth, Math.random() * window.innerHeight, "Gyro", gyroInfo);
+
+  const startDate = document.createElement("input");
+  startDate.type = "date";
+  const endDate = document.createElement("input");
+  endDate.type = "date";
+  const liveBtn  = document.createElement('button')
+  liveBtn.className= 'live'
+  liveBtn.innerText = '🔴 LIVE'
+    const exportBtn  = document.createElement('button')
+  exportBtn.className= 'live'
+  exportBtn.innerText = 'Export CSV'
+  
+  
+  startDate.onchange = endDate.onchange = async () => {
+    if(!endDate.value || !startDate.value)return
+
+    const frames = await fetch(`/query?start=${startDate.value}&end=${endDate.value}`).then(res=>res.json())
+
+    live = false
+    charts.temp.labels.length = 0;
+    charts.hum.labels.length = 0;
+    charts.infra.labels.length = 0;
+    charts.vis.labels.length = 0;
+
+    charts.temp.data.length = 0;
+    charts.hum.data.length = 0;
+    charts.infra.data.length = 0;
+    charts.vis.data.length = 0;
+      
+
+      for(const frame of frames) {
+        const d = new Date(frame[1])
+        const label = d.getMinutes().toString().padStart(2, "0") + ":" + d.getSeconds().toString().padStart(2, "0")
+        charts.temp.labels.push(label);
+      charts.hum.labels.push(label);
+      charts.infra.labels.push(label);
+      charts.vis.labels.push(label);
+
+      charts.temp.data.push(frame[2]);
+      charts.hum.data.push(frame[3]);
+      charts.infra.data.push(frame[5]);
+      charts.vis.data.push(frame[6]);
+        
+    }
+
+    charts.temp.chart.update();
+    charts.hum.chart.update();
+    charts.infra.chart.update();
+    charts.vis.chart.update();
+  }
+
+  liveBtn.onclick = () => {
+    live = true
+    charts.temp.labels.length = 0;
+    charts.hum.labels.length = 0;
+    charts.infra.labels.length = 0;
+    charts.vis.labels.length = 0;
+
+    charts.temp.data.length = 0;
+    charts.hum.data.length = 0;
+    charts.infra.data.length = 0;
+    charts.vis.data.length = 0;
+  }
+  createPanel(Math.random() * window.innerWidth, Math.random() * window.innerHeight, "Timeline", startDate, endDate, liveBtn, exportBtn);
+
+  connect();
+</script>
+
+<style>
+  canvas {
+    width: 400px !important;
+    height: 200px !important;
+  }
+
+  html {
+    font-family: "Space Mono", monospace;
+    background-color: #101215;
+    color: white;
+    color-scheme: dark;
+  }
+
+  .panel {
+    position: absolute;
+    background-color: #101215;
+    box-shadow: 2px 4px 16px black;
+  }
+
+  .title {
+    cursor: move;
+    user-select: none;
+  }
+
+  .scene {
+    width: 200px;
+    height: 200px;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.1s linear;
+  }
+
+  .cube {
+    transform-style: preserve-3d;
+    transform-origin: center center;
+    transition: transform 0.1s linear;
+  }
+
+  .face {
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    color: black;
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid #fff;
+    line-height: 200px;
+    text-align: center;
+    font-weight: bold;
+  }
+
+  .front {
+    transform: translateZ(100px);
+  }
+  .back {
+    transform: rotateY(180deg) translateZ(100px);
+  }
+  .right {
+    transform: rotateY(90deg) translateZ(100px);
+  }
+  .left {
+    transform: rotateY(-90deg) translateZ(100px);
+  }
+  .top {
+    transform: rotateX(90deg) translateZ(100px);
+  }
+  .bottom {
+    transform: rotateX(-90deg) translateZ(100px);
+  }
+</style>
