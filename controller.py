@@ -46,7 +46,7 @@ class Controller:
             # self.lsm.mag_gain = adafruit_lsm9ds1.MAGGAIN_16GAUSS
             # self.lsm.gyro_scale = adafruit_lsm9ds1.GYROSCALE_2000DPS
 
-        except:
+        except Exception as e:
             self.lsm = None
             print(e)
             print("ERROR: Failed to initialize LSM9DS1 Accel/Mag/Gyro Sensor")
