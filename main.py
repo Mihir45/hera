@@ -5,6 +5,7 @@
 from http import HTTPStatus
 import asyncio
 import json
+import time
 
 from websockets import ServerConnection
 from websockets.asyncio.server import serve
@@ -66,10 +67,12 @@ async def collect():
     print("starting collector")
     controller = Controller(config.FAKE_DATA)
     while True:
+        start_time = time.monotonic()
+
         frame = controller.read()
         orientation = controller.compute_orientation(frame)
         await pub(frame, orientation)
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(config.DELTA_TIME - time.monotonic() + start_time)
 
 
 async def ws_handle(ws: ServerConnection):

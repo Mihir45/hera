@@ -20,68 +20,63 @@ from ahrs.filters import Madgwick
 from frame import Frame
 from orientation import Orientation
 
-G_SCALE = 4000
-
 
 class Controller:
-    fuse = Madgwick()
+    fuse = Madgwick(Dt=config.DELTA_TIME)
     q = np.array([1.0, 0.0, 0.0, 0.0])  # initial quaternion
-
+    last_time = time.monotonic()
 
     def __init__(self, fake: bool):
         if fake:
             self.prev = None
-        else:
-            self.i2c = board.I2C()
+            return
 
-            try:
-                self.tsl = adafruit_tsl2591.TSL2591(self.i2c)
-            except Exception as e:
-                self.tsl = None
-                print(e)
-                print("ERROR: Failed to initialize TSL2591 Light Sensor")
+        self.i2c = board.I2C()
 
-            try:
-                self.lsm = adafruit_lsm9ds1.LSM9DS1_I2C(self.i2c)
-                self.lsm.accel_range = adafruit_lsm9ds1.ACCELRANGE_16G
-                self.lsm.mag_gain = adafruit_lsm9ds1.MAGGAIN_16GAUSS
-                self.lsm.gyro_scale = adafruit_lsm9ds1.GYROSCALE_2000DPS
+        try:
+            self.tsl = adafruit_tsl2591.TSL2591(self.i2c)
+        except Exception as e:
+            self.tsl = None
+            print(e)
+            print("ERROR: Failed to initialize TSL2591 Light Sensor")
 
-            except:
-                self.lsm = None
-                print("ERROR: Failed to initialize LSM9DS1 Accel/Mag/Gyro Sensor")
-            
-            try:
-                self.dht = adafruit_dht.DHT11(board.D17)
-            except:
-                self.dht = None
-                print("Error: Failed to initialize DHT Temperature & Relative Humidity Sensor")
-            
-            with open("lsm9ds1_calibration.json") as f:
-                self.cal = json.load(f)
+        try:
+            self.lsm = adafruit_lsm9ds1.LSM9DS1_I2C(self.i2c)
+            # self.lsm.accel_range = adafruit_lsm9ds1.ACCELRANGE_16G
+            # self.lsm.mag_gain = adafruit_lsm9ds1.MAGGAIN_16GAUSS
+            # self.lsm.gyro_scale = adafruit_lsm9ds1.GYROSCALE_2000DPS
+
+        except:
+            self.lsm = None
+            print(e)
+            print("ERROR: Failed to initialize LSM9DS1 Accel/Mag/Gyro Sensor")
+        
+        try:
+            self.dht = adafruit_dht.DHT11(board.D17)
+        except Exception as e:
+            self.dht = None
+            print(e)
+            print("Error: Failed to initialize DHT Temperature & Relative Humidity Sensor")
+        
+        with open("lsm9ds1_calibration.json") as f:
+            self.cal = json.load(f)
 
     def compute_orientation(self, frame: Frame) -> Orientation:
-        # Convert raw accel to g's
-        accel = np.array(frame.acceleration)  # from datasheet
+        accel = np.array(frame.acceleration)
         
-        # Convert raw gyro to rad/s
-        gyro_dps = np.array(frame.gyro)*G_SCALE # from datasheet
-        gyro = np.radians(gyro_dps)  # convert to rad/s
+        gyro = np.array(frame.gyro)
         
-        # Magnotometer values
         mag = np.array(frame.magnetic)
-        mag *= 1e5
         
 
-        # Update filter
-        self.q = self.fuse.updateIMU(q=self.q, acc=accel, gyr=gyro)
+        self.q = self.fuse.updateMARG(q=self.q, acc=accel, gyr=gyro, mag=mag)
 
-        # Convert quaternion to euler angles
-        roll, pitch, yaw = np.degrees(q2euler(self.q))  # confirm order
+        roll, pitch, yaw = np.degrees(q2euler(self.q))
         o = Orientation()
         o.roll = roll
         o.pitch = pitch
         o.yaw = yaw
+
         return o
 
     def calibrate_gyro(self, raw):
@@ -97,10 +92,12 @@ class Controller:
         if config.FAKE_DATA:
             return self.fake()
 
-        """
-        Reads from TSL2591, LSM9DS1, and DHT sensors and returns a Frame with the data.
-        """
+        cur_time = time.monotonic()
         f = Frame()
+        
+        # print(cur_time - self.last_time) DELTA_TIME
+
+        self.last_time = cur_time
 
         # Read temperature and humidity from AM2320
         try:
@@ -111,16 +108,22 @@ class Controller:
                 f.temperature = 0
                 f.humidity = 0
         except Exception as e:
-            print(e)
+            print("DHT", e)
             f.temperature = 0
             f.humidity = 0
 
         # Read light data from TSL2591
         try:
-            f.lux = int(self.tsl.lux)
-            f.infrared = int(self.tsl.infrared)
-            f.visible = int(self.tsl.visible)
-        except:
+            if self.tsl is not None:
+                f.lux = int(self.tsl.lux)
+                f.infrared = int(self.tsl.infrared)
+                f.visible = int(self.tsl.visible)
+            else:
+                f.lux = 0
+                f.infrared = 0
+                f.visible = 0
+        except Exception as e:
+            print("TSL", e)
             f.lux = 0
             f.infrared = 0
             f.visible = 0
@@ -131,14 +134,15 @@ class Controller:
             if self.lsm is not None:
                 accel = self.lsm.acceleration
                 gyro = self.lsm.gyro
-                mag = self.lsm.magnetic  # (x, y, z) in gauss
+                mag = self.lsm.magnetic
                 
                 f.acceleration = tuple(map(float, accel))
-                f.acceleration = (-f.acceleration[1], -f.acceleration[0], f.acceleration[2])
+                # f.acceleration = (-f.acceleration[1], -f.acceleration[0], f.acceleration[2])
 
-                f.gyro = tuple(map(float, gyro))
-                gyro = (-f.gyro[1], -f.gyro[0], f.gyro[2])
-                f.magnetic = tuple(map(float, mag))
+                f.gyro = tuple(map(float, gyro)) #convert ut to gauss
+
+                # gyro = (-f.gyro[1], -f.gyro[0], f.gyro[2])
+                f.magnetic = tuple(map(lambda x: float(x) * 0.01, mag))
 
                 # f.acceleration = self.calibrate_accel(tuple(float(x) for x in accel)).tolist()
                 # f.gyro = self.calibrate_gyro(tuple(float(x) for x in gyro)).tolist()
@@ -148,10 +152,8 @@ class Controller:
                 f.gyro = (0, 0, 0)
                 f.magnetic = (0, 0, 0)
                 
-            # if f.temperature == 0:
-                # f.temperature = self.lsm.temperature
         except Exception as e:
-            print(e)
+            print("LSM", e)
             f.acceleration = (0, 0, 0)
             f.gyro = (0, 0, 0)
             f.magnetic = (0, 0, 0)
@@ -160,11 +162,6 @@ class Controller:
         return f
 
     def fake(self) -> Frame:
-        """
-        Generates a Frame instance with realistic, smooth-changing data.
-        If prev is provided, values will be based on previous frame (with small drift).
-        Otherwise, values are generated using periodic functions and noise.
-        """
         t = time.time()
         f = Frame()
 
