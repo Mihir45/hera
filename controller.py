@@ -58,8 +58,8 @@ class Controller:
             print(e)
             print("Error: Failed to initialize DHT Temperature & Relative Humidity Sensor")
         
-        with open("lsm9ds1_calibration.json") as f:
-            self.cal = json.load(f)
+        # with open("lsm9ds1_calibration.json") as f:
+        #     self.cal = json.load(f)
 
     def compute_orientation(self, frame: Frame) -> Orientation:
         accel = np.array(frame.acceleration)
@@ -79,14 +79,14 @@ class Controller:
 
         return o
 
-    def calibrate_gyro(self, raw):
-        return np.array(raw) - np.array(self.cal["gyro_bias"])
+    # def calibrate_gyro(self, raw):
+    #     return np.array(raw) - np.array(self.cal["gyro_bias"])
 
-    def calibrate_accel(self, raw):
-        return (np.array(raw) - np.array(self.cal["accel_offset"])) * np.array(self.cal["accel_scale"])
+    # def calibrate_accel(self, raw):
+    #     return (np.array(raw) - np.array(self.cal["accel_offset"])) * np.array(self.cal["accel_scale"])
 
-    def calibrate_mag(self, raw):
-        return (np.array(raw) - np.array(self.cal["mag_offset"])) * np.array(self.cal["mag_scale"])
+    # def calibrate_mag(self, raw):
+    #     return (np.array(raw) - np.array(self.cal["mag_offset"])) * np.array(self.cal["mag_scale"])
 
     def read(self) -> Frame:
         if config.FAKE_DATA:
