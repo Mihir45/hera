@@ -22,9 +22,9 @@ from orientation import Orientation
 
 
 class Controller:
-    fuse = Madgwick(Dt=config.DELTA_TIMEDt=config.DELTA_TIME)
+    fuse = Madgwick(Dt=config.DELTA_TIME)
     q = np.array([1.0, 0.0, 0.0, 0.0])  # initial quaternion
-    last_time = time.monotonic()    last_time = time.monotonic()
+    last_time = time.monotonic()
 
     def __init__(self, fake: bool):
         if fake:
@@ -32,9 +32,6 @@ class Controller:
             return
 
         self.i2c = board.I2C()
-            return
-
-        self.i2c = board.I2C()
 
         try:
             self.tsl = adafruit_tsl2591.TSL2591(self.i2c)
@@ -42,18 +39,7 @@ class Controller:
             self.tsl = None
             print(e)
             print("ERROR: Failed to initialize TSL2591 Light Sensor")
-        try:
-            self.tsl = adafruit_tsl2591.TSL2591(self.i2c)
-        except Exception as e:
-            self.tsl = None
-            print(e)
-            print("ERROR: Failed to initialize TSL2591 Light Sensor")
-
-        try:
-            self.lsm = adafruit_lsm9ds1.LSM9DS1_I2C(self.i2c)
-            # self.lsm.accel_range = adafruit_lsm9ds1.ACCELRANGE_16G
-            # self.lsm.mag_gain = adafruit_lsm9ds1.MAGGAIN_16GAUSS
-            # self.lsm.gyro_scale = adafruit_lsm9ds1.GYROSCALE_2000DPS
+        
         try:
             self.lsm = adafruit_lsm9ds1.LSM9DS1_I2C(self.i2c)
             # self.lsm.accel_range = adafruit_lsm9ds1.ACCELRANGE_16G
@@ -77,18 +63,14 @@ class Controller:
 
     def compute_orientation(self, frame: Frame) -> Orientation:
         accel = np.array(frame.acceleration)
-        accel = np.array(frame.acceleration)
         
-        gyro = np.array(frame.gyro)
         gyro = np.array(frame.gyro)
         
         mag = np.array(frame.magnetic)
         
 
         self.q = self.fuse.updateMARG(q=self.q, acc=accel, gyr=gyro, mag=mag)
-        self.q = self.fuse.updateMARG(q=self.q, acc=accel, gyr=gyro, mag=mag)
 
-        roll, pitch, yaw = np.degrees(q2euler(self.q))
         roll, pitch, yaw = np.degrees(q2euler(self.q))
         o = Orientation()
         o.roll = roll
@@ -112,12 +94,7 @@ class Controller:
             return self.fake()
 
         cur_time = time.monotonic()
-        cur_time = time.monotonic()
         f = Frame()
-        
-        # print(cur_time - self.last_time) DELTA_TIME
-
-        self.last_time = cur_time
         
         # print(cur_time - self.last_time) DELTA_TIME
 
@@ -131,8 +108,9 @@ class Controller:
             else:
                 f.temperature = 0
                 f.humidity = 0
+
         except Exception as e:
-            print("DHT", "DHT", e)
+            print("DHT", e)
             f.temperature = 0
             f.humidity = 0
 
@@ -146,16 +124,7 @@ class Controller:
                 f.lux = 0
                 f.infrared = 0
                 f.visible = 0
-        except Exception as e:
-            print("TSL", e)
-            if self.tsl is not None:
-                f.lux = int(self.tsl.lux)
-                f.infrared = int(self.tsl.infrared)
-                f.visible = int(self.tsl.visible)
-            else:
-                f.lux = 0
-                f.infrared = 0
-                f.visible = 0
+                
         except Exception as e:
             print("TSL", e)
             f.lux = 0
@@ -169,17 +138,12 @@ class Controller:
                 accel = self.lsm.acceleration
                 gyro = self.lsm.gyro
                 mag = self.lsm.magnetic
-                mag = self.lsm.magnetic
                 
                 f.acceleration = tuple(map(float, accel))
                 # # f.acceleration = (-f.acceleration[1], -f.acceleration[0], f.acceleration[2])
 
                 f.gyro = tuple(map(float, gyro)) #convert ut to gauss
 
-                f.gyro = tuple(map(float, gyro)) #convert ut to gauss
-
-                # gyro = (-f.gyro[1], -f.gyro[0], f.gyro[2])
-                f.magnetic = tuple(map(lambda x: float(x) * 0.01, mag))
                 # gyro = (-f.gyro[1], -f.gyro[0], f.gyro[2])
                 f.magnetic = tuple(map(lambda x: float(x) * 0.01, mag))
 
